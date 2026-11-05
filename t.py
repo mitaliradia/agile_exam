@@ -1,37 +1,74 @@
-from flask import Flask,request,jsonify
+import pytest
+import sys
+from pathlib import Path
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
+from app import check_leave_balance
 
-app = Flask(__name__)
+@pytest.mark.parametrize("balance,requested,expected",
+                         [
+                             (10,5,True),
+                             (3,5,False),
+                             (10,0,False),
+                             (10,-2,False),
+                         ])
 
-def check_leave_balance(balance,requested):
-    if requested<=0:
-        return False
-
-    if requested>balance:
-        return False
-
-    return True
-
-def calculate_remaining_balance(balance,requested):
-    if check_leave_balance(balance,requested):
-        return balance-requested
-
-    return balance
-
-@app.route("/")
-def home():
-    return "Welcome to the Leave Management System!"
-
-@app.route("/check_leave", methods=["POST"])
-def check_leave():
-    data=request.get_json()
-    balance=data["balance"]
-    requested=data["requested"]
-
-    if check_leave_balance(balance,requested):
-        return jsonify({"message":"Leave approved"}),200
-
-    return jsonify({"message":"Insufficient leave balance or invalid request"}),400
+def test_check_leave_balance(balance,requested,expected):
+    result=check_leave_balance(balance,requested)
+    assert result==expected
 
 
-if __name__=="__main__":
-    app.run(host="0.0.0.0",port=5000)
+
+from pathlib import Path
+import time
+
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+
+driver=webdriver.Chrome()
+wait=WebDriverWait(driver,10)
+
+try:
+    file_path=Path("login.html").resolve().as_uri()
+    driver.get(file_path)
+    time.sleep(2)
+
+    driver.find_element(By.ID,"username").send_keys("admin")
+    time.sleep(2)
+
+    driver.find_element(By.ID,"password").send_keys("admin123")
+    time.sleep(2)
+
+    driver.find_element(By.CSS_SELECTOR,"button[type='submit']").click()
+    time.sleep(2)
+
+    success_message=wait.until(EC.text_to_be_present_in_element((By.ID,"message"),"Login successful!"))
+    time.sleep(2)
+
+    assert success_message
+
+    print("Valid login test passed")
+
+    driver.find_element(By.ID,"username").clear()
+    driver.find_element(By.ID,"password").clear()
+
+    driver.find_element(By.ID,"username").send_keys("wronguser")
+    time.sleep(2)
+
+    driver.find_element(By.ID,"password").send_keys("wrongpass")
+    time.sleep(2)
+
+    driver.find_element(By.CSS_SELECTOR,"button[type='submit']").click()
+    time.sleep(2)
+
+    
+    error_message=wait.until(EC.text_to_be_present_in_element((By.ID,"message"),"Invalid username or password."))
+    time.sleep(2)
+    
+    assert error_message
+
+    print("Invalid login test passed")
+
+finally:
+    driver.quit()
